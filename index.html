@@ -29,7 +29,10 @@ body {
   padding: 32px 16px;
 }
 
-.wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 16px; }
+.wrap { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
+
+.layout { display: flex; gap: 16px; align-items: flex-start; }
+.layout > .panel { flex: 1; min-width: 0; }
 
 header {
   display: flex; align-items: center; gap: 10px;
@@ -125,6 +128,9 @@ textarea:focus { border-color: var(--accent); }
   text-align: center; padding: 0 8px;
 }
 
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+}
 @media (max-width: 480px) {
   .code-val { font-size: 20px; letter-spacing: 2px; }
 }
@@ -148,22 +154,24 @@ textarea:focus { border-color: var(--accent); }
     </button>
   </header>
 
-  <div class="panel">
-    <div class="panel-title">Ключи <span style="font-weight:400;text-transform:none;color:var(--text-mute)">— до 8 штук, каждый с новой строки</span></div>
-    <textarea id="keys" placeholder="JBSWY3DPEHPK3PXP&#10;otpauth://totp/...&#10;..." spellcheck="false" oninput="onKeysChange()"></textarea>
-    <div class="btn-row">
-      <button class="btn" onclick="clearKeys()">Очистить</button>
-      <button class="btn primary" id="copy-all" onclick="copyAllCodes(this)" disabled>Скопировать все коды</button>
+  <div class="layout">
+    <div class="panel">
+      <div class="panel-title">Ключи <span style="font-weight:400;text-transform:none;color:var(--text-mute)">— до 8 штук, каждый с новой строки</span></div>
+      <textarea id="keys" placeholder="JBSWY3DPEHPK3PXP&#10;otpauth://totp/...&#10;..." spellcheck="false" oninput="onKeysChange()"></textarea>
+      <div class="btn-row">
+        <button class="btn" onclick="clearKeys()">Очистить</button>
+        <button class="btn primary" id="copy-all" onclick="copyAllCodes(this)" disabled>Скопировать все коды</button>
+      </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <div class="panel-title">Коды</div>
-    <div class="codes" id="codes">
-      <div class="empty" id="empty">Коды появятся здесь</div>
+    <div class="panel">
+      <div class="panel-title">Коды</div>
+      <div class="codes" id="codes">
+        <div class="empty" id="empty">Коды появятся здесь</div>
+      </div>
+      <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+      <div class="timer-label" id="timer-label">ожидание</div>
     </div>
-    <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
-    <div class="timer-label" id="timer-label">ожидание</div>
   </div>
 
   <div class="hint-text">
@@ -189,13 +197,18 @@ function b32decode(str) {
   return new Uint8Array(bytes);
 }
 
-function extractSecret(line) {
-  line = line.trim();
+function stripWrapping(s) {
+  if (!s) return s;
+  return s.trim().replace(/^[\s'"`]+|[\s'"`,;]+$/g, '');
+}
+
+function extractSecret(rawLine) {
+  const line = stripWrapping(rawLine);
   if (!line) return null;
   if (/^otpauth:\/\//i.test(line)) {
     try {
       const u = new URL(line);
-      return u.searchParams.get('secret');
+      return stripWrapping(u.searchParams.get('secret'));
     } catch (_) { return null; }
   }
   return line;
