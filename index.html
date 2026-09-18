@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOTP Codes</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --bg2: #0d1018; --card: #151b27; --card2: #111827;
+  --border: #1e2d45; --border-soft: #1e2433;
+  --text: #e2e8f0; --text-dim: #64748b; --text-mute: #334155;
+  --accent: #6366f1; --accent-hover: #4f52e0;
+  --green: #22c55e; --green-bg: #0d1f12; --green-border: #16a34a;
+  --red: #ef4444; --red-bg: #1a0a0a; --red-border: #7f1d1d;
+}
+:root.light {
+  --bg: #f4f5f7; --bg2: #ffffff; --card: #ffffff; --card2: #ffffff;
+  --border: #dfe3ea; --border-soft: #e5e8ee;
+  --text: #1a1d29; --text-dim: #6b7280; --text-mute: #9ca3af;
+  --accent: #6366f1; --accent-hover: #4f52e0;
+  --green: #16a34a; --green-bg: #ecfdf3; --green-border: #86efac;
+  --red: #dc2626; --red-bg: #fef2f2; --red-border: #fecaca;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  padding: 32px 16px;
+}
+
+.wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 16px; }
+
+header {
+  display: flex; align-items: center; gap: 10px;
+}
+header svg { color: var(--accent); flex-shrink: 0; }
+header h1 { font-size: 17px; font-weight: 600; flex: 1; }
+.theme-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--card); color: var(--text-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.panel {
+  background: var(--card2); border: 1px solid var(--border-soft);
+  border-radius: 14px; padding: 18px;
+}
+.panel-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--text-dim); margin-bottom: 12px;
+}
+
+textarea {
+  width: 100%; min-height: 150px; resize: vertical;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; font-size: 13px; color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace; outline: none;
+  line-height: 1.6; transition: border-color .15s;
+}
+textarea::placeholder { color: var(--text-mute); font-family: inherit; }
+textarea:focus { border-color: var(--accent); }
+
+.btn-row { display: flex; gap: 8px; margin-top: 12px; }
+.btn {
+  flex: 1; padding: 10px; background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 12px;
+  font-weight: 500; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 6px; transition: all .15s;
+}
+.btn:hover:not(:disabled) { border-color: var(--text-mute); color: var(--text); background: var(--card); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn.primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.btn.flash-btn { background: var(--green) !important; border-color: var(--green) !important; color: #fff !important; }
+
+.codes { display: flex; flex-direction: column; gap: 8px; }
+.empty {
+  text-align: center; padding: 30px 10px; color: var(--text-mute); font-size: 12px;
+  border: 1px dashed var(--border); border-radius: 10px;
+}
+
+.code-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+  cursor: pointer; user-select: none;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
+}
+.code-card:hover { background: var(--bg2); }
+.code-card.flash {
+  border-color: var(--green-border) !important;
+  background: var(--green-bg) !important;
+  transform: scale(0.98);
+}
+.code-idx {
+  font-size: 11px; color: var(--text-mute); font-family: 'SF Mono', monospace;
+  width: 18px; flex-shrink: 0;
+}
+.code-val {
+  font-family: 'SF Mono', monospace; font-size: 24px; font-weight: 700;
+  color: var(--accent); letter-spacing: 4px; flex: 1;
+  transition: color .12s ease;
+}
+.code-card.flash .code-val { color: var(--green); }
+.code-card.invalid .code-val { color: var(--red); font-size: 13px; letter-spacing: 0; font-weight: 500; }
+.code-hint { font-size: 10px; color: var(--text-mute); white-space: nowrap; }
+.code-card.flash .code-hint { color: var(--green); }
+
+.timer-wrap {
+  height: 3px; background: var(--border); border-radius: 4px; overflow: hidden;
+  margin-top: 4px;
+}
+.timer-bar { height: 100%; background: var(--accent); transition: width 1s linear; }
+.timer-label {
+  text-align: center; font-size: 11px; color: var(--text-dim);
+  margin-top: 6px; letter-spacing: .04em;
+}
+
+.hint-text {
+  font-size: 11px; color: var(--text-mute); line-height: 1.6;
+  text-align: center; padding: 0 8px;
+}
+
+@media (max-width: 480px) {
+  .code-val { font-size: 20px; letter-spacing: 2px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+    <h1>TOTP Codes</h1>
+    <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" aria-label="Переключить тему">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="theme-icon">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="panel">
+    <div class="panel-title">Ключи <span style="font-weight:400;text-transform:none;color:var(--text-mute)">— до 8 штук, каждый с новой строки</span></div>
+    <textarea id="keys" placeholder="JBSWY3DPEHPK3PXP&#10;otpauth://totp/...&#10;..." spellcheck="false" oninput="onKeysChange()"></textarea>
+    <div class="btn-row">
+      <button class="btn" onclick="clearKeys()">Очистить</button>
+      <button class="btn primary" id="copy-all" onclick="copyAllCodes(this)" disabled>Скопировать все коды</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Коды</div>
+    <div class="codes" id="codes">
+      <div class="empty" id="empty">Коды появятся здесь</div>
+    </div>
+    <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+    <div class="timer-label" id="timer-label">ожидание</div>
+  </div>
+
+  <div class="hint-text">
+    Считается прямо в браузере (алгоритм TOTP, как в Google Authenticator) — ключи никуда не отправляются.<br>
+    Понимает обычный Base32-секрет и ссылки вида <code style="color:var(--text-dim)">otpauth://totp/...</code>.
+  </div>
+
+</div>
+
+<script>
+const STEP = 30, DIGITS = 6;
+let entries = [];
+
+function b32decode(str) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const clean = str.toUpperCase().replace(/[^A-Z2-7]/g, '');
+  if (!clean) return null;
+  let bits = '';
+  for (const c of clean) bits += alphabet.indexOf(c).toString(2).padStart(5, '0');
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  if (!bytes.length) return null;
+  return new Uint8Array(bytes);
+}
+
+function extractSecret(line) {
+  line = line.trim();
+  if (!line) return null;
+  if (/^otpauth:\/\//i.test(line)) {
+    try {
+      const u = new URL(line);
+      return u.searchParams.get('secret');
+    } catch (_) { return null; }
+  }
+  return line;
+}
+
+async function totp(secretRaw, time) {
+  const secret = extractSecret(secretRaw);
+  if (!secret) return null;
+  const key = b32decode(secret);
+  if (!key || !key.length) return null;
+  const counter = Math.floor(time / 1000 / STEP);
+  const buf = new ArrayBuffer(8);
+  new DataView(buf).setUint32(4, counter);
+  try {
+    const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, buf));
+    const offset = sig[sig.length - 1] & 0xf;
+    const bin = ((sig[offset] & 0x7f) << 24) | ((sig[offset+1] & 0xff) << 16) | ((sig[offset+2] & 0xff) << 8) | (sig[offset+3] & 0xff);
+    return (bin % (10 ** DIGITS)).toString().padStart(DIGITS, '0');
+  } catch (_) { return null; }
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch (_) {}
+  const t = document.createElement('textarea');
+  t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.focus(); t.select();
+  document.execCommand('copy'); t.remove();
+}
+
+function clickCopy(el, code) {
+  if (!code) return;
+  copyText(code);
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 500);
+}
+
+async function copyAllCodes(btn) {
+  const codes = entries.map(e => e.code).filter(Boolean);
+  if (!codes.length) return;
+  await copyText(codes.join('\n'));
+  btn.classList.add('flash-btn');
+  setTimeout(() => btn.classList.remove('flash-btn'), 500);
+}
+
+function clearKeys() {
+  document.getElementById('keys').value = '';
+  onKeysChange();
+}
+
+function onKeysChange() {
+  const lines = document.getElementById('keys').value.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 8);
+  entries = lines.map(line => ({ line, code: null }));
+  render();
+  refreshCodes();
+}
+
+function render() {
+  const box = document.getElementById('codes');
+  const copyAllBtn = document.getElementById('copy-all');
+  if (!entries.length) {
+    box.innerHTML = '<div class="empty" id="empty">Коды появятся здесь</div>';
+    copyAllBtn.disabled = true;
+    return;
+  }
+  copyAllBtn.disabled = !entries.some(e => e.code);
+  box.innerHTML = entries.map((e, i) => {
+    if (e.code) {
+      return `<div class="code-card" id="cc${i}" onclick="clickCopy(this,'${e.code}')">
+        <span class="code-idx">${i+1}</span>
+        <span class="code-val">${e.code}</span>
+        <span class="code-hint">копировать</span>
+      </div>`;
+    }
+    return `<div class="code-card invalid" id="cc${i}">
+      <span class="code-idx">${i+1}</span>
+      <span class="code-val">неверный ключ</span>
+    </div>`;
+  }).join('');
+}
+
+async function refreshCodes() {
+  if (!entries.length) return;
+  const now = Date.now();
+  const codes = await Promise.all(entries.map(e => totp(e.line, now)));
+  entries.forEach((e, i) => e.code = codes[i]);
+  render();
+}
+
+function tick() {
+  const now = Date.now();
+  const secInStep = (now / 1000) % STEP;
+  const remaining = Math.ceil(STEP - secInStep);
+  const pct = ((STEP - secInStep) / STEP) * 100;
+  document.getElementById('timer-bar').style.width = pct + '%';
+  document.getElementById('timer-label').textContent = entries.length
+    ? 'обновление через ' + remaining
+    : 'ожидание';
+  if (remaining === STEP || (window._lastRemaining && remaining > window._lastRemaining)) {
+    refreshCodes();
+  }
+  window._lastRemaining = remaining;
+}
+setInterval(tick, 1000);
+tick();
+
+function applyTheme(light) {
+  document.documentElement.classList.toggle('light', light);
+  document.getElementById('theme-icon').innerHTML = light
+    ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+    : '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+}
+function toggleTheme() {
+  const light = !document.documentElement.classList.contains('light');
+  applyTheme(light);
+  try { localStorage.setItem('totp_theme', light ? 'light' : 'dark'); } catch (_) {}
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('totp_theme'); } catch (_) {}
+  const light = saved ? saved === 'light' : !window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(light);
+})();
+</script>
+</body>
+</html>
