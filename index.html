@@ -260,7 +260,10 @@ function clearKeys() {
 }
 
 function onKeysChange() {
-  const lines = document.getElementById('keys').value.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 8);
+  const lines = document.getElementById('keys').value.split('\n')
+    .map(l => l.trim())
+    .filter(l => stripWrapping(l))
+    .slice(0, 8);
   entries = lines.map(line => ({ line, code: null }));
   render();
   refreshCodes();
