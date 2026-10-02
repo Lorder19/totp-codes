@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TOTP Codes</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -258,6 +259,15 @@ function clearKeys() {
   document.getElementById('keys').value = '';
   onKeysChange();
 }
+
+document.addEventListener('keydown', e => {
+  if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.code !== 'KeyA') return;
+  const ta = document.getElementById('keys');
+  if (document.activeElement === ta) return;
+  e.preventDefault();
+  ta.focus();
+  ta.select();
+});
 
 function onKeysChange() {
   const lines = document.getElementById('keys').value.split('\n')
