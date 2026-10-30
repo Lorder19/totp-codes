@@ -124,16 +124,40 @@ textarea:focus { border-color: var(--accent); }
   margin-top: 6px; letter-spacing: .04em;
 }
 
+.gen-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gen-row label { font-size: 12px; color: var(--text-dim); }
+.gen-row input[type=number] {
+  width: 76px; padding: 9px 10px; background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+  font-family: 'SF Mono', 'Fira Code', monospace; transition: border-color .15s;
+}
+.gen-row input[type=number]:focus { border-color: var(--accent); }
+.gen-row .btn { flex: 1; min-width: 150px; }
+.gen-err { font-size: 12px; color: var(--red); margin-top: 8px; }
+.pw-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 8px; margin-top: 12px;
+}
+.pw-list .code-card { padding: 10px 14px; }
+.pw-val {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 16px; font-weight: 600;
+  color: var(--accent); letter-spacing: 1px; flex: 1; word-break: break-all;
+  transition: color .12s ease;
+}
+.code-card.flash .pw-val { color: var(--green); }
+
 .hint-text {
   font-size: 11px; color: var(--text-mute); line-height: 1.6;
   text-align: center; padding: 0 8px;
 }
 
 @media (max-width: 700px) {
-  .layout { flex-direction: column; }
+  .layout { flex-direction: column; align-items: stretch; }
 }
 @media (max-width: 480px) {
   .code-val { font-size: 20px; letter-spacing: 2px; }
+  .pw-val { font-size: 13px; letter-spacing: 0; word-break: normal; white-space: nowrap; }
+  .pw-list .code-hint { display: none; }
 }
 </style>
 </head>
@@ -173,6 +197,18 @@ textarea:focus { border-color: var(--accent); }
       <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
       <div class="timer-label" id="timer-label">ожидание</div>
     </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Генератор паролей <span style="font-weight:400;text-transform:none;color:var(--text-mute)">— 20 символов: a–z, A–Z, 0–9 · нажми на пароль, чтобы скопировать</span></div>
+    <div class="gen-row">
+      <label for="pw-count">Сколько</label>
+      <input type="number" id="pw-count" min="1" max="100" value="5" oninput="clearGenErr()" onkeydown="if(event.key==='Enter') generatePasswords()">
+      <button class="btn primary" onclick="generatePasswords()">Сгенерировать</button>
+      <button class="btn" id="pw-copy-all" onclick="copyAllPasswords(this)" disabled>Скопировать все</button>
+    </div>
+    <div class="gen-err" id="pw-err" hidden></div>
+    <div class="pw-list" id="pw-list"></div>
   </div>
 
   <div class="hint-text">
@@ -263,7 +299,8 @@ function clearKeys() {
 document.addEventListener('keydown', e => {
   if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.code !== 'KeyA') return;
   const ta = document.getElementById('keys');
-  if (document.activeElement === ta) return;
+  const a = document.activeElement;
+  if (a === ta || (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'))) return;
   e.preventDefault();
   ta.focus();
   ta.select();
@@ -339,6 +376,55 @@ function toggleTheme() {
   applyTheme(light);
   try { localStorage.setItem('totp_theme', light ? 'light' : 'dark'); } catch (_) {}
 }
+/* ── password generator ── */
+const PW_LEN = 20, PW_MAX = 100;
+const PW_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+let passwords = [];
+
+function randomIndex(n) {
+  const limit = 256 - (256 % n), buf = new Uint8Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+  return buf[0] % n;
+}
+function makePassword() {
+  for (;;) {
+    let p = '';
+    for (let i = 0; i < PW_LEN; i++) p += PW_ALPHABET[randomIndex(PW_ALPHABET.length)];
+    if (/[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]/.test(p)) return p;
+  }
+}
+function clearGenErr() { document.getElementById('pw-err').hidden = true; }
+function generatePasswords() {
+  const input = document.getElementById('pw-count');
+  const n = Number(input.value);
+  const err = document.getElementById('pw-err');
+  if (!Number.isInteger(n) || n < 1 || n > PW_MAX) {
+    err.textContent = 'Укажи число от 1 до ' + PW_MAX;
+    err.hidden = false;
+    input.focus();
+    return;
+  }
+  clearGenErr();
+  try { localStorage.setItem('totp_pw_count', String(n)); } catch (_) {}
+  passwords = Array.from({ length: n }, makePassword);
+  document.getElementById('pw-list').innerHTML = passwords.map((p, i) =>
+    `<div class="code-card" onclick="clickCopy(this, passwords[${i}])">
+      <span class="code-idx">${i + 1}</span>
+      <span class="pw-val">${p}</span>
+      <span class="code-hint">копировать</span>
+    </div>`).join('');
+  document.getElementById('pw-copy-all').disabled = false;
+}
+async function copyAllPasswords(btn) {
+  if (!passwords.length) return;
+  await copyText(passwords.join('\n'));
+  btn.classList.add('flash-btn');
+  setTimeout(() => btn.classList.remove('flash-btn'), 500);
+}
+(function initPwCount() {
+  try { const c = localStorage.getItem('totp_pw_count'); if (c) document.getElementById('pw-count').value = c; } catch (_) {}
+})();
+
 (function initTheme() {
   let saved = null;
   try { saved = localStorage.getItem('totp_theme'); } catch (_) {}
